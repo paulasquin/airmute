@@ -21,6 +21,8 @@ jobs:
         run: |
           chmod +x build/package_airmute.sh
           ./build/package_airmute.sh
+        env:
+          SDKROOT: $(xcrun --show-sdk-path --sdk macosx)
 
       - name: Create Release
         id: create_release

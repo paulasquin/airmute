@@ -45,7 +45,7 @@ This app allows you to quickly toggle your microphone mute state by pressing vol
 Installation
 -----------
 
-1. Open the AirMute.dmg or unzip the AirMute.zip file
+1. Open unzip the AirMute.zip file
 2. Drag AirMute.app to your Applications folder
 3. Launch the app from your Applications folder
 4. You may need to right-click the app and select "Open" the first time to bypass Gatekeeper
@@ -85,16 +85,6 @@ echo "Creating ZIP archive..."
 cd "$BUILD_DIR"
 zip -r AirMute.zip AirMute.app AirMute_README.txt
 
-# Create DMG for distribution
-echo "Creating DMG for distribution..."
-hdiutil create -size 10m -fs HFS+ -volname "AirMute" "$BUILD_DIR/AirMute.dmg"
-hdiutil attach "$BUILD_DIR/AirMute.dmg"
-cp -r "$APP_DIR" "/Volumes/AirMute/"
-cp "$BUILD_DIR/AirMute_README.txt" "/Volumes/AirMute/README.txt"
-ln -s /Applications "/Volumes/AirMute/Applications"
-hdiutil detach "/Volumes/AirMute"
-
 echo "Packaging complete\!"
 echo "The app is available at: $APP_DIR"
 echo "The distribution ZIP is available at: $BUILD_DIR/AirMute.zip"
-echo "The distribution DMG is available at: $BUILD_DIR/AirMute.dmg"
