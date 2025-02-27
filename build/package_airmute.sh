@@ -28,7 +28,7 @@ echo "APPL????" > "$CONTENTS_DIR/PkgInfo"
 
 # Compile the Swift code
 echo "Compiling Swift code..."
-swiftc -o "$MACOS_DIR/AirMute" \
+xcrun swiftc -o "$MACOS_DIR/AirMute" \
     "$PROJECT_DIR/AirMute/AppDelegate.swift" \
     "$PROJECT_DIR/AirMute/main.swift" \
     -framework Cocoa \
