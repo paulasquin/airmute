@@ -32,3 +32,6 @@ jobs:
             build/AirMute.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
+
+permissions:
+  contents: write # Grant permission to write to repository contents
