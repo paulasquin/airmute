@@ -18,6 +18,17 @@ Works with
 - Visual indicator of current mute state in the menu bar
 - Also supports keyboard shortcut (Option+Shift+M) for testing
 
+## Installation
+- Clone this repo
+- run 
+```bash
+sh build/package_airmute.sh
+```
+- Move `build/AirMute.app` to your `Applications` folder
+
+TODO:
+Later, we will support packaged app in Github Release, it prior needs to add app signing.
+
 ## How to Use
 
 1. Double-click the app to run it (or add to your Login Items for auto-start)
