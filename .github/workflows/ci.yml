@@ -12,17 +12,17 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v2
+        uses: actions/checkout@v4
 
       - name: Set up Swift
         uses: swift-actions/setup-swift@v2
+        with:
+          swift-version: "5.1.0"
 
       - name: Run packaging script
         run: |
           chmod +x build/package_airmute.sh
           ./build/package_airmute.sh
-        env:
-          SDKROOT: $(xcrun --show-sdk-path --sdk macosx)
 
       - name: Create Release
         id: create_release
