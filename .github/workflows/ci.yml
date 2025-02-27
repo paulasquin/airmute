@@ -1,0 +1,36 @@
+name: Build and Release AirMute
+
+on:
+  push:
+    tags:
+      - 'v*'  # Trigger on version tags
+  workflow_dispatch:  # Allow manual triggering
+
+jobs:
+  build:
+    runs-on: macos-latest  # Use macOS for Swift builds
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Swift
+        uses: actions/setup-swift@v1
+        with:
+          swift-version: '5.5'  # Specify the Swift version
+
+      - name: Run packaging script
+        run: |
+          chmod +x build/package_airmute.sh
+          ./build/package_airmute.sh
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          files: |
+            build/AirMute.zip
+            build/AirMute.dmg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
