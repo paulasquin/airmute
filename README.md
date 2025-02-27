@@ -1,6 +1,13 @@
 # AirMute
 
-A simple macOS app that toggles the microphone mute state when you quickly change the volume up and down on your AirPods or Mac.
+A simple macOS app that toggles the microphone mute state when you quickly change the volume up and down on your AirPods or Mac when you are in a meeting.
+
+Works with
+- Google Meet
+- Zoom
+- Teams
+- Discord
+- etc.
 
 ## Features
 
