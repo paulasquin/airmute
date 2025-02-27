@@ -31,7 +31,6 @@ jobs:
           tag_name: ${{ github.ref }}
           files: |
             build/AirMute.zip
-            build/AirMute.dmg
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} 
 
