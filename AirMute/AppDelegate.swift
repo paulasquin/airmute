@@ -26,8 +26,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func setupSounds() {
-        // Use system sounds directly for simplicity
-        // Different system sounds for mute and unmute
+        // Load sounds only when needed to save memory/resources
+        soundsInitialized = false
+    }
+    
+    private var soundsInitialized = false
+    
+    private func initSoundsIfNeeded() {
+        // Only initialize sounds if they haven't been initialized
+        if soundsInitialized { return }
         
         do {
             // Load mute sound (lower pitch)
@@ -42,7 +49,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             unmuteSound?.volume = 0.5
             unmuteSound?.prepareToPlay()
             
-            print("Sound system initialized successfully")
+            soundsInitialized = true
         } catch {
             print("Error loading sounds: \(error)")
         }
@@ -69,63 +76,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Create a distributed notification center to receive volume change notifications
         let center = DistributedNotificationCenter.default()
         
-        // Register for multiple volume-related notifications to ensure we catch changes
-        let notificationNames = [
-            "com.apple.sound.settingsChangedNotification",
-            "com.apple.audiocontroller.didchangevolume", 
-            "VolumeChanged",
-            "SystemVolumeDidChangeNotification"
-        ]
+        // Register for the most reliable volume notification instead of multiple
+        center.addObserver(
+            self,
+            selector: #selector(handleVolumeChange(_:)),
+            name: NSNotification.Name("com.apple.sound.settingsChangedNotification"),
+            object: nil
+        )
         
-        for name in notificationNames {
-            center.addObserver(
-                self,
-                selector: #selector(handleVolumeChange(_:)),
-                name: NSNotification.Name(name),
-                object: nil
-            )
-        }
-        
-        // Also use a timer to periodically check the volume
-        Timer.scheduledTimer(withTimeInterval: 0.2, repeats: true) { [weak self] _ in
-            self?.checkCurrentVolume()
+        // Initialize volume one time at startup
+        getSystemVolume { [weak self] initialVolume in
+            self?.previousVolume = initialVolume
         }
         
         print("Volume change monitoring set up")
     }
     
-    private func checkCurrentVolume() {
-        // Use AppleScript to get the current volume
-        let task = Process()
-        let pipe = Pipe()
-        
-        task.launchPath = "/usr/bin/osascript"
-        task.arguments = ["-e", "output volume of (get volume settings)"]
-        task.standardOutput = pipe
-        
-        task.launch()
-        task.waitUntilExit()
-        
-        let data = pipe.fileHandleForReading.readDataToEndOfFile()
-        guard let volumeString = String(data: data, encoding: .utf8),
-              let volume = Int(volumeString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            return
-        }
-        
-        // Only process if the volume has changed
-        if volume != previousVolume && previousVolume != -1 {
-            // Determine direction
-            if volume > previousVolume {
-                recordVolumeChange(.up)
-                print("Volume UP detected: \(previousVolume) -> \(volume)")
-            } else if volume < previousVolume {
-                recordVolumeChange(.down)
-                print("Volume DOWN detected: \(previousVolume) -> \(volume)")
+    private func getSystemVolume(completion: @escaping (Int) -> Void) {
+        DispatchQueue.global(qos: .utility).async {
+            let task = Process()
+            let pipe = Pipe()
+            
+            task.launchPath = "/usr/bin/osascript"
+            task.arguments = ["-e", "output volume of (get volume settings)"]
+            task.standardOutput = pipe
+            
+            task.launch()
+            task.waitUntilExit()
+            
+            let data = pipe.fileHandleForReading.readDataToEndOfFile()
+            guard let volumeString = String(data: data, encoding: .utf8),
+                  let volume = Int(volumeString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                completion(-1)
+                return
             }
-            previousVolume = volume
-        } else if previousVolume == -1 {
-            // Initialize the previous volume
-            previousVolume = volume
+            
+            DispatchQueue.main.async {
+                completion(volume)
+            }
         }
     }
     
@@ -136,43 +124,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var checkTimer: Timer?
     
     @objc private func handleVolumeChange(_ notification: Notification) {
-        // Get the current output volume
-        let script = "output volume of (get volume settings)"
-        let volumeTask = Process()
-        let volumePipe = Pipe()
-        
-        volumeTask.launchPath = "/usr/bin/osascript"
-        volumeTask.arguments = ["-e", script]
-        volumeTask.standardOutput = volumePipe
-        
-        volumeTask.launch()
-        volumeTask.waitUntilExit()
-        
-        let volumeData = volumePipe.fileHandleForReading.readDataToEndOfFile()
-        guard let volumeString = String(data: volumeData, encoding: .utf8),
-              let currentVolume = Int(volumeString.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            return
+        // Run the volume check on a background thread to avoid blocking the main thread
+        getSystemVolume { [weak self] currentVolume in
+            guard let self = self, currentVolume != -1 else { return }
+            
+            // If this is the first time, just initialize the previous volume and return
+            if self.previousVolume == -1 {
+                self.previousVolume = currentVolume
+                return
+            }
+            
+            // Only process if the volume has actually changed
+            if currentVolume != self.previousVolume {
+                // Determine if volume went up or down
+                if currentVolume > self.previousVolume {
+                    self.recordVolumeChange(.up)
+                } else if currentVolume < self.previousVolume {
+                    self.recordVolumeChange(.down)
+                }
+                
+                // Update previous volume
+                self.previousVolume = currentVolume
+            }
         }
-        
-        print("Volume change detected: \(currentVolume)")
-        
-        // If this is the first time, just initialize the previous volume and return
-        if previousVolume == -1 {
-            previousVolume = currentVolume
-            return
-        }
-        
-        // Determine if volume went up or down
-        if currentVolume > previousVolume {
-            recordVolumeChange(.up)
-            print("Volume UP detected")
-        } else if currentVolume < previousVolume {
-            recordVolumeChange(.down)
-            print("Volume DOWN detected")
-        }
-        
-        // Update previous volume
-        previousVolume = currentVolume
     }
     
     private func recordVolumeChange(_ direction: VolumeDirection) {
@@ -184,37 +158,34 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             volumeSequence = [direction]
             sequenceStartTime = now
             
-            // Set a timer to check after 1 second if pattern is complete
+            // Set a timer to check for pattern completion
             checkTimer?.invalidate()
             checkTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
                 self?.checkForVolumePattern()
             }
-            
-            print("Started new volume sequence with \(direction)")
         } else {
-            // Add to existing sequence
+            // Add to existing sequence and check for our target pattern immediately
             volumeSequence.append(direction)
-            print("Added to sequence: \(volumeSequence)")
             
-            // Reset the timer
-            checkTimer?.invalidate()
-            checkTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: false) { [weak self] _ in
-                self?.checkForVolumePattern()
+            // Check if we have the target pattern now
+            if volumeSequence.count == 2 && 
+               volumeSequence[0] == .up && 
+               volumeSequence[1] == .down {
+                
+                // Cancel the timer since we're checking now
+                checkTimer?.invalidate()
+                checkForVolumePattern()
             }
         }
     }
     
     private func checkForVolumePattern() {
-        print("Checking pattern: \(volumeSequence)")
-        
         // Check if we have "up" then "down" as the sequence
         if volumeSequence.count == 2 && 
            volumeSequence[0] == .up && 
            volumeSequence[1] == .down {
             
-            print("✅ UP-DOWN pattern detected! Toggling mic...")
-            
-            // Trigger the mic toggle
+            // Trigger the mic toggle on the main thread
             DispatchQueue.main.async {
                 self.toggleMute()
             }
@@ -253,6 +224,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func playMuteSound() {
+        // Initialize sounds if needed
+        initSoundsIfNeeded()
+        
         // Use system sound if our custom sound isn't available
         if let sound = muteSound, sound.isPlaying == false {
             sound.play()
@@ -263,14 +237,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     private func playUnmuteSound() {
+        // Initialize sounds if needed
+        initSoundsIfNeeded()
+        
         // Use system sound if our custom sound isn't available
         if let sound = unmuteSound, sound.isPlaying == false {
             sound.play()
         } else {
-            // Fallback to system sound with delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                NSSound.beep()
-            }
+            // Fallback to system sound
+            NSSound.beep()
         }
     }
     
@@ -284,13 +259,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func setMicrophoneMute(mute: Bool) {
         // Set input volume using AppleScript for simplicity and reliability
         let volume = mute ? 0 : 20
-        let task = Process()
-        task.launchPath = "/usr/bin/osascript"
-        task.arguments = ["-e", "set volume input volume \(volume)"]
-        task.launch()
-        task.waitUntilExit()
         
-        print("Microphone volume set to \(volume)% - Muted: \(mute)")
+        DispatchQueue.global(qos: .userInitiated).async {
+            let task = Process()
+            task.launchPath = "/usr/bin/osascript"
+            task.arguments = ["-e", "set volume input volume \(volume)"]
+            task.launch()
+            task.waitUntilExit()
+        }
     }
     
     @objc private func quitApp() {
